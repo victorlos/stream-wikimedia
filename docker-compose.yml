@@ -1,4 +1,5 @@
-# Local Kafka for step 1: one broker in KRaft mode (no ZooKeeper), one topic, one UI.
+# Local stack: one Kafka broker in KRaft mode (no ZooKeeper), one topic, a Kafka UI,
+# and a Flink cluster.
 #
 #   docker compose up -d      start everything
 #   docker compose down       stop, keep the data
@@ -75,6 +76,35 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  # Flink cluster: the job manager coordinates, the task manager does the work.
+  # Web UI at http://localhost:8081
+  jobmanager:
+    build: ./flink
+    image: wiki-streaming-flink:2.2.1
+    container_name: flink-jobmanager
+    command: jobmanager
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+
+  taskmanager:
+    build: ./flink
+    image: wiki-streaming-flink:2.2.1
+    container_name: flink-taskmanager
+    command: taskmanager
+    depends_on:
+      - jobmanager
+    environment:
+      # A slot runs one parallel piece of a job. Four is plenty for this project.
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
 
 volumes:
   kafka-data:
