@@ -92,6 +92,8 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
+    volumes:
+      - ./flink/sql:/opt/flink/sql
 
   taskmanager:
     build: ./flink
