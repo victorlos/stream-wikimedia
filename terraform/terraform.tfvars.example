@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is ignored by git.
+
+organization_name = "MYORG"
+account_name      = "MYACCOUNT"
+developer_user    = "YOUR_SNOWFLAKE_USERNAME"
