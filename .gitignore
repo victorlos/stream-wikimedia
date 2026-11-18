@@ -1,3 +1,5 @@
 .venv/
 .vscode/
 .env
+.terraform/
+terraform/.terraform.lock.hcl
