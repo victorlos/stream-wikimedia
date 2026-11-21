@@ -25,5 +25,5 @@ provider "snowflake" {
 }
 
 provider "docker" {
-  host = "unix:///Users/amandacostaelias/.docker/run/docker.sock"
+  host = var.docker_host
 }
