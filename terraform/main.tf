@@ -1,19 +1,29 @@
-resource "snowflake_database" "wikimedia" {
-  name    = "WIKIMEDIA"
-  comment = "Wikimedia recent changes, streamed through Kafka. Managed by Terraform."
+terraform {
+  required_version = ">= 1.5"
+
+  required_providers {
+    snowflake = {
+      source  = "snowflakedb/snowflake"
+      version = "~> 2.23"
+    }
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "4.7.0"
+    }
+  }
 }
 
-resource "snowflake_schema" "raw" {
-  database = snowflake_database.wikimedia.name
-  name     = "RAW"
-  comment  = "Events exactly as they arrive from Kafka."
+# Terraform logs in as the TERRAFORM_SVC service user created by bootstrap.sql.
+# It authenticates with a key pair, so there is no password anywhere.
+provider "snowflake" {
+  organization_name = var.organization_name
+  account_name      = var.account_name
+  user              = "TERRAFORM_SVC"
+  role              = "TERRAFORM"
+  authenticator     = "SNOWFLAKE_JWT"
+  private_key       = file(pathexpand(var.terraform_private_key_path))
 }
 
-resource "snowflake_warehouse" "transforming" {
-  name                = "TRANSFORMING_WH"
-  warehouse_size      = "XSMALL"
-  auto_suspend        = 60 # seconds of inactivity before it stops billing
-  auto_resume         = "true"
-  initially_suspended = true
-  comment             = "dbt and ad hoc queries. Managed by Terraform."
+provider "docker" {
+  host = "unix:///Users/amandacostaelias/.docker/run/docker.sock"
 }
