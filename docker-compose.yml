@@ -80,8 +80,7 @@ services:
   # Flink cluster: the job manager coordinates, the task manager does the work.
   # Web UI at http://localhost:8081
   jobmanager:
-    build: ./flink
-    image: wiki-streaming-flink:2.2.1
+    image: flink:2.2.1-scala_2.12-java17
     container_name: flink-jobmanager
     command: jobmanager
     depends_on:
@@ -94,10 +93,10 @@ services:
         jobmanager.rpc.address: jobmanager
     volumes:
       - ./flink/sql:/opt/flink/sql
+      - ./flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar:/opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar
 
   taskmanager:
-    build: ./flink
-    image: wiki-streaming-flink:2.2.1
+    image: flink:2.2.1-scala_2.12-java17
     container_name: flink-taskmanager
     command: taskmanager
     depends_on:
@@ -107,6 +106,8 @@ services:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 4
+    volumes:
+      - ./flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar:/opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar
 
 volumes:
   kafka-data:
