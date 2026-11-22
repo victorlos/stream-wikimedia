@@ -1,5 +1,6 @@
 -- Save Flink's position regularly and commit it to Kafka.
 SET 'execution.checkpointing.interval' = '10s';
+SET 'pipeline.name' = 'wikimedia-clean-events';
 
 CREATE TABLE recent_changes (
   `wiki`      STRING,
