@@ -109,5 +109,20 @@ services:
     volumes:
       - ./flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar:/opt/flink/lib/flink-sql-connector-kafka-5.0.0-2.2.jar
 
+  # Streams Wikimedia edits into Kafka.
+  producer:
+    image: python:3.12-slim
+    container_name: wikimedia-producer
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+    working_dir: /app
+    volumes:
+      - ./producer:/app
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    command: sh -c "pip install --quiet -r requirements.txt && python connect-api.py"
+    restart: unless-stopped
+
 volumes:
   kafka-data:
