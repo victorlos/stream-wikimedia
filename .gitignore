@@ -7,3 +7,6 @@ terraform/terraform.tfstate.backup
 terraform/terraform.tfvars
 *.p8
 *.pem
+connect/plugins/
+connect/connect.env
+secrets/

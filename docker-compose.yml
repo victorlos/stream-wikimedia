@@ -4,6 +4,7 @@
 #   docker compose up -d      start everything
 #   docker compose down       stop, keep the data
 #   docker compose down -v    stop and delete the data
+name: docker-compose-kafka-flink
 
 services:
   kafka:
@@ -122,6 +123,67 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     command: sh -c "pip install --quiet -r requirements.txt && python connect-api.py"
+    restart: unless-stopped
+
+
+  # Runs once: downloads the Snowflake connector and the Bouncy Castle libraries
+  # it needs into connect/plugins (ignored by git). Skips files already there.
+  connect-plugins:
+    image: curlimages/curl:8.15.0
+    container_name: connect-plugins
+    user: "0:0"
+    volumes:
+      - ./connect/plugins:/plugins
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        get() {
+          if [ -s "/plugins/$$2" ]; then echo "present $$2"; return; fi
+          curl -fsSL -o "/plugins/$$2.part" "$$1/$$2"
+          mv "/plugins/$$2.part" "/plugins/$$2"
+          echo "downloaded $$2"
+        }
+        M=https://repo1.maven.org/maven2
+        get $$M/com/snowflake/snowflake-kafka-connector/4.2.3 snowflake-kafka-connector-4.2.3.jar
+        get $$M/org/bouncycastle/bc-fips/2.1.0 bc-fips-2.1.0.jar
+        get $$M/org/bouncycastle/bcpkix-fips/2.1.8 bcpkix-fips-2.1.8.jar
+
+  # Kafka Connect: reads both topics and writes them to WIKIMEDIA.RAW in Snowflake.
+  # Status at http://localhost:8083/connectors/WIKIMEDIA_SNOWFLAKE_SINK/status
+  # 4.1.1 is the Kafka version Snowflake tests connector v4 against.
+  kafka-connect:
+    image: apache/kafka:4.1.1
+    container_name: kafka-connect
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+      connect-plugins:
+        condition: service_completed_successfully
+    ports:
+      - "8083:8083"
+    env_file:
+      - ./connect/connect.env # SNOWFLAKE_URL
+    environment:
+      # Snowflake asks for the jars on the main classpath, not in plugin.path.
+      CLASSPATH: /opt/connect-plugins/*
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx1g
+    volumes:
+      - ./connect/plugins:/opt/connect-plugins:ro
+      - ./connect/worker.properties:/etc/kafka-connect/worker.properties:ro
+      - ./connect/snowflake-sink.properties:/etc/kafka-connect/snowflake-sink.properties:ro
+      - ./secrets/kafka_connect_svc.p8:/secrets/kafka_connect_svc.p8:ro
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        # Add the account URL and the private key (one line, no BEGIN/END lines)
+        # to the connector settings, in a file that exists only in the container.
+        cp /etc/kafka-connect/snowflake-sink.properties /tmp/snowflake-sink.properties
+        echo "snowflake.url.name=$$SNOWFLAKE_URL" >> /tmp/snowflake-sink.properties
+        echo "snowflake.private.key=$$(grep -v -- '-----' /secrets/kafka_connect_svc.p8 | tr -d '\n\r')" >> /tmp/snowflake-sink.properties
+        exec /opt/kafka/bin/connect-standalone.sh \
+          /etc/kafka-connect/worker.properties /tmp/snowflake-sink.properties
     restart: unless-stopped
 
 volumes:
