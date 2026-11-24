@@ -10,3 +10,4 @@ terraform/terraform.tfvars
 connect/plugins/
 connect/connect.env
 secrets/
+connect/kafka/

@@ -4,6 +4,7 @@
 #   docker compose up -d      start everything
 #   docker compose down       stop, keep the data
 #   docker compose down -v    stop and delete the data
+
 name: docker-compose-kafka-flink
 
 services:
@@ -49,7 +50,9 @@ services:
       retries: 10
       start_period: 20s
 
-  # Runs once, creates the topic, exits.
+  # Runs once, creates the topics, exits.
+  #   wikimedia-recentchange  raw events from the producer
+  #   wikimedia-clean         typed events from the Flink clean-events job
   init-topics:
     image: apache/kafka:4.2.0
     container_name: init-topics
@@ -58,12 +61,12 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/bash", "-c"]
     command:
-      - >
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092
-        --create --if-not-exists
-        --topic wikimedia-recentchange
-        --partitions 3
-        --replication-factor 1
+      - |
+        for topic in wikimedia-recentchange wikimedia-clean; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
+            --create --if-not-exists --topic "$$topic" \
+            --partitions 3 --replication-factor 1 || exit 1
+        done
 
   # Browse topics, messages and consumer groups at http://localhost:8080
   kafka-ui:
@@ -125,23 +128,24 @@ services:
     command: sh -c "pip install --quiet -r requirements.txt && python connect-api.py"
     restart: unless-stopped
 
-
-  # Runs once: downloads the Snowflake connector and the Bouncy Castle libraries
-  # it needs into connect/plugins (ignored by git). Skips files already there.
+  # Runs once: downloads into connect/ (ignored by git), skipping what is already there:
+  #   connect/plugins  the Snowflake connector and the Bouncy Castle libraries it needs
+  #   connect/kafka    Kafka 4.1.1, used to run Kafka Connect (see kafka-connect below)
   connect-plugins:
     image: curlimages/curl:8.15.0
     container_name: connect-plugins
     user: "0:0"
     volumes:
-      - ./connect/plugins:/plugins
+      - ./connect:/connect
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
+        mkdir -p /connect/plugins
         get() {
-          if [ -s "/plugins/$$2" ]; then echo "present $$2"; return; fi
-          curl -fsSL -o "/plugins/$$2.part" "$$1/$$2"
-          mv "/plugins/$$2.part" "/plugins/$$2"
+          if [ -s "/connect/plugins/$$2" ]; then echo "present $$2"; return; fi
+          curl -fsSL -o "/connect/plugins/$$2.part" "$$1/$$2"
+          mv "/connect/plugins/$$2.part" "/connect/plugins/$$2"
           echo "downloaded $$2"
         }
         M=https://repo1.maven.org/maven2
@@ -149,11 +153,26 @@ services:
         get $$M/org/bouncycastle/bc-fips/2.1.0 bc-fips-2.1.0.jar
         get $$M/org/bouncycastle/bcpkix-fips/2.1.8 bcpkix-fips-2.1.8.jar
 
+        if [ -x /connect/kafka/bin/connect-standalone.sh ]; then
+          echo "present Kafka 4.1.1"
+        else
+          rm -rf /connect/kafka /connect/kafka_2.13-4.1.1 /connect/kafka.tgz
+          curl -fsSL -o /connect/kafka.tgz \
+            https://archive.apache.org/dist/kafka/4.1.1/kafka_2.13-4.1.1.tgz
+          tar -xzf /connect/kafka.tgz -C /connect
+          mv /connect/kafka_2.13-4.1.1 /connect/kafka
+          rm /connect/kafka.tgz
+          echo "downloaded Kafka 4.1.1"
+        fi
+
   # Kafka Connect: reads both topics and writes them to WIKIMEDIA.RAW in Snowflake.
   # Status at http://localhost:8083/connectors/WIKIMEDIA_SNOWFLAKE_SINK/status
-  # 4.1.1 is the Kafka version Snowflake tests connector v4 against.
+  #
+  # Runs Kafka 4.1.1 (the version Snowflake tests connector v4 against) on a
+  # glibc-based Java image. The official apache/kafka image is Alpine-based
+  # (musl), and the connector's native Snowpipe Streaming library needs glibc.
   kafka-connect:
-    image: apache/kafka:4.1.1
+    image: eclipse-temurin:21-jre
     container_name: kafka-connect
     depends_on:
       init-topics:
@@ -166,9 +185,13 @@ services:
       - ./connect/connect.env # SNOWFLAKE_URL
     environment:
       # Snowflake asks for the jars on the main classpath, not in plugin.path.
-      CLASSPATH: /opt/connect-plugins/*
+      # Kafka's own libraries go first: the Snowflake jar bundles a newer
+      # logging API (SLF4J 2) that otherwise hides every Kafka Connect log line.
+      CLASSPATH: /opt/kafka/libs/*:/opt/connect-plugins/*
       KAFKA_HEAP_OPTS: -Xms256m -Xmx1g
+      LOG_DIR: /tmp/kafka-logs # /opt/kafka is mounted read-only
     volumes:
+      - ./connect/kafka:/opt/kafka:ro
       - ./connect/plugins:/opt/connect-plugins:ro
       - ./connect/worker.properties:/etc/kafka-connect/worker.properties:ro
       - ./connect/snowflake-sink.properties:/etc/kafka-connect/snowflake-sink.properties:ro
