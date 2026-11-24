@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Tables written by the Snowflake Kafka connector. One row per Kafka message:
+      the whole event in RECORD_CONTENT, and topic, partition, offset and
+      timestamps in RECORD_METADATA.
+    database: WIKIMEDIA
+    schema: RAW
+    config:
+      loaded_at_field: "to_timestamp_ltz(record_metadata:SnowflakeConnectorPushTime::number, 3)"
+      freshness:
+        warn_after: {count: 15, period: minute}
+        error_after: {count: 60, period: minute}
+    tables:
+      - name: recent_changes
+        identifier: RECENT_CHANGES
+        description: Raw Wikimedia events, from the producer's wikimedia-recentchange topic.
+      - name: clean_changes
+        identifier: CLEAN_CHANGES
+        description: Events typed by the Flink clean-events job, from the wikimedia-clean topic.

@@ -8,6 +8,10 @@ locals {
     for line in split("\n", file(pathexpand(var.kafka_public_key_path))) :
     trimspace(line) if !startswith(line, "-----")
   ])
+  dbt_public_key = join("", [
+    for line in split("\n", file(pathexpand(var.dbt_public_key_path))) :
+    trimspace(line) if !startswith(line, "-----")
+  ])
 }
 
 # ---------------------------------------------------------------- loader
@@ -96,6 +100,20 @@ resource "snowflake_grant_privileges_to_account_role" "transformer_raw_tables" {
 resource "snowflake_grant_account_role" "transformer_to_developer" {
   role_name = snowflake_account_role.transformer.name
   user_name = var.developer_user
+}
+
+# dbt logs in as this user, locally now and from GitHub Actions later.
+resource "snowflake_service_user" "dbt" {
+  name              = "DBT_SVC"
+  default_role      = snowflake_account_role.transformer.name
+  default_warehouse = snowflake_warehouse.transforming.name
+  rsa_public_key    = local.dbt_public_key
+  comment           = "dbt. Key-pair authentication only."
+}
+
+resource "snowflake_grant_account_role" "transformer_to_dbt" {
+  role_name = snowflake_account_role.transformer.name
+  user_name = snowflake_service_user.dbt.name
 }
 
 # ------------------------------------------------------------- hierarchy

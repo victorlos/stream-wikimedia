@@ -1,0 +1,21 @@
+
+name: wikimedia
+version: "1.0.0"
+profile: wikimedia
+ 
+model-paths: ["models"]
+test-paths: ["tests"]
+ 
+clean-targets: ["target", "dbt_packages"]
+ 
+models:
+  wikimedia:
+    staging:
+      +schema: staging
+    marts:
+      +schema: marts
+      +materialized: table
+    reports:
+      +schema: reports
+      +materialized: view
+ 

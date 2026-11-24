@@ -23,3 +23,7 @@ output "transformer_role" {
 output "kafka_connect_user" {
   value = snowflake_service_user.kafka_connect.name
 }
+
+output "dbt_user" {
+  value = snowflake_service_user.dbt.name
+}

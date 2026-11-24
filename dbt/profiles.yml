@@ -1,0 +1,13 @@
+wikimedia:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: DBT_SVC
+      private_key_path: "{{ env_var('DBT_PRIVATE_KEY_PATH', env_var('HOME', '') ~ '/.snowflake/wiki-streaming/dbt_svc.p8') }}"
+      role: WIKI_TRANSFORMER
+      warehouse: TRANSFORMING_WH
+      database: WIKIMEDIA
+      schema: "{{ env_var('DBT_SCHEMA', 'DEV') }}"
+      threads: 4

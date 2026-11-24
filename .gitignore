@@ -11,3 +11,7 @@ connect/plugins/
 connect/connect.env
 secrets/
 connect/kafka/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml

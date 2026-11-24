@@ -28,6 +28,12 @@ variable "kafka_public_key_path" {
   default     = "~/.snowflake/wiki-streaming/kafka_connect_svc.pub"
 }
 
+variable "dbt_public_key_path" {
+  description = "Public key of the dbt service user."
+  type        = string
+  default     = "~/.snowflake/wiki-streaming/dbt_svc.pub"
+}
+
 variable "docker_host" {
   description = "How to connect to Docker on this machine"
   type        = string
